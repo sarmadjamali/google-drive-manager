@@ -1,0 +1,31 @@
+# ─── SECRETS & CREDENTIALS — NEVER COMMIT ─────────────────────────────────────
+credentials.json
+tokens/
+*.token.json
+token_*.json
+
+# ─── PERSONAL / RUNTIME DATA ──────────────────────────────────────────────────
+# config.py holds your real accounts & paths — copy it from config.example.py
+config.py
+migration.log
+kept_files.json
+GDrive_Backup/
+*_Backup/
+
+# ─── PYTHON ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.Python
+*.egg-info/
+.pytest_cache/
+
+# ─── OS / EDITOR ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

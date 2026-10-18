@@ -1,0 +1,1066 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Google Drive Storage Manager</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --panel: #1a1d2e;
+    --border: #2d3148;
+    --accent: #4f8ef7;
+    --accent2: #7c5cbf;
+    --green: #22c55e;
+    --yellow: #f59e0b;
+    --red: #ef4444;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 14px;
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  header {
+    background: linear-gradient(135deg, #1a1d2e 0%, #0f1117 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 18px 28px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  header .logo { font-size: 26px; }
+  header h1 { font-size: 18px; font-weight: 700; color: var(--text); }
+  header p  { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .status-dot {
+    margin-left: auto;
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--muted);
+  }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--muted);
+    animation: pulse 2s infinite;
+  }
+  .dot.online  { background: var(--green); }
+  .dot.working { background: var(--yellow); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+  /* ── Layout ── */
+  main { padding: 24px 28px; max-width: 1200px; margin: 0 auto; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+  .card-title {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .08em; color: var(--muted); margin-bottom: 14px;
+  }
+
+  /* ── Storage bars ── */
+  .account-label { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .account-email { font-size: 11px; color: var(--muted); margin-bottom: 10px; }
+  .bar-track {
+    height: 10px; border-radius: 999px;
+    background: #1e2136; overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%; border-radius: 999px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    transition: width .6s ease;
+  }
+  .bar-fill.warn  { background: linear-gradient(90deg, var(--yellow), #f97316); }
+  .bar-fill.crit  { background: linear-gradient(90deg, var(--red), #dc2626); }
+  .bar-meta {
+    display: flex; justify-content: space-between;
+    font-size: 11px; color: var(--muted); margin-top: 5px;
+  }
+  .pct { font-size: 20px; font-weight: 700; margin-bottom: 10px; }
+  .pct.warn { color: var(--yellow); }
+  .pct.crit { color: var(--red); }
+  .pct.ok   { color: var(--green); }
+
+  /* ── Buttons ── */
+  btn, .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border-radius: 8px;
+    border: none; cursor: pointer;
+    font-size: 13px; font-weight: 600;
+    transition: opacity .15s, transform .1s;
+  }
+  .btn:active { transform: scale(.97); }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { opacity: .85; }
+  .btn-danger  { background: var(--red); color: #fff; }
+  .btn-danger:hover  { opacity: .85; }
+  .btn-ghost   { background: transparent; color: var(--muted);
+                 border: 1px solid var(--border); }
+  .btn-ghost:hover { color: var(--text); border-color: var(--accent); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-sm { padding: 5px 10px; font-size: 12px; border-radius: 6px; }
+
+  /* ── Folder picker ── */
+  .folder-list { display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto; }
+  .folder-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 12px; border-radius: 8px;
+    border: 1px solid var(--border); cursor: pointer;
+    transition: background .15s;
+  }
+  .folder-item:hover   { background: #20243a; }
+  .folder-item.checked { background: #1e2a4a; border-color: var(--accent); }
+  .folder-item.photos-item { border-color: #7c4dff44; background: #1a1330; }
+  .folder-item.photos-item:hover { background: #231840; }
+  .folder-item.photos-item.checked { background: #2a1a50; border-color: #7c4dff; }
+  .folder-item input[type=checkbox] {
+    accent-color: var(--accent); width: 15px; height: 15px;
+  }
+  .folder-icon { font-size: 16px; }
+  .photos-badge {
+    font-size: 10px; font-weight: 600; letter-spacing: .04em;
+    background: #7c4dff33; color: #b39dff;
+    border: 1px solid #7c4dff55; border-radius: 4px;
+    padding: 1px 6px; margin-left: 6px;
+  }
+  .folder-name { flex: 1; font-size: 13px; }
+
+  /* ── File table ── */
+  .file-table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
+  .file-table th {
+    text-align: left; padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    color: var(--muted); font-weight: 600;
+    text-transform: uppercase; font-size: 10px; letter-spacing: .06em;
+  }
+  .file-table td { padding: 7px 10px; border-bottom: 1px solid #1e2136; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-table tr:hover td { background: #1c1f33; }
+  .file-table .mime-badge {
+    font-size: 10px; padding: 2px 7px; border-radius: 999px;
+    background: #252840; color: var(--muted);
+  }
+  .file-table .location-cell { font-size: 11px; color: var(--muted); max-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-table .size-cell { text-align: right; color: var(--accent); font-weight: 600; white-space: nowrap; }
+  .folder-size { font-size: 11px; color: var(--muted); margin-left: auto; }
+
+  /* ── Progress log ── */
+  #log-box {
+    background: #0a0c14;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 12px;
+    max-height: 280px;
+    overflow-y: auto;
+    line-height: 1.65;
+  }
+  .log-ok   { color: var(--green); }
+  .log-err  { color: var(--red); }
+  .log-warn { color: var(--yellow); }
+  .log-info { color: #94a3b8; }
+  .log-accent { color: var(--accent); }
+
+  /* ── Modal ── */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,.7);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100;
+  }
+  .modal {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 16px; padding: 28px; max-width: 440px; width: 90%;
+  }
+  .modal h2 { font-size: 16px; margin-bottom: 8px; }
+  .modal p  { color: var(--muted); font-size: 13px; margin-bottom: 20px; line-height: 1.6; }
+  .modal .actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+  /* ── Misc ── */
+  .section-gap { margin-top: 20px; }
+  .flex-between { display: flex; justify-content: space-between; align-items: center; }
+  .tag-info { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .tag { font-size: 11px; padding: 3px 10px; border-radius: 999px;
+         background: #252840; color: var(--muted); }
+  .empty-state { text-align: center; color: var(--muted); padding: 30px; }
+  .skeleton { background: #252840; border-radius: 6px; height: 14px; margin: 4px 0; animation: shimmer 1.3s infinite; }
+  @keyframes shimmer { 0%,100%{opacity:.5} 50%{opacity:1} }
+  .spinner { display: inline-block; width: 14px; height: 14px;
+    border: 2px solid rgba(255,255,255,.2);
+    border-top-color: #fff; border-radius: 50%;
+    animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  select, input[type=text] {
+    background: #12141f; border: 1px solid var(--border);
+    color: var(--text); border-radius: 8px; padding: 7px 12px;
+    font-size: 13px; outline: none;
+  }
+  select:focus, input[type=text]:focus { border-color: var(--accent); }
+  .progress-wrap { margin: 10px 0; }
+  .progress-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .progress-bar { height: 6px; border-radius: 999px; background: #1e2136; overflow: hidden; }
+  .progress-bar .fill {
+    height: 100%; border-radius: 999px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    transition: width .4s ease;
+  }
+  .confirm-badge {
+    display: inline-block; background: #2a1a1a; border: 1px solid var(--red);
+    color: var(--red); border-radius: 999px; font-size: 11px;
+    padding: 3px 10px; margin-left: 8px;
+  }
+  .scrollbar-thin::-webkit-scrollbar { width: 5px; }
+  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: #2d3148; border-radius: 999px; }
+</style>
+</head>
+<body>
+
+<!-- ══════════ HEADER ══════════ -->
+<header>
+  <span class="logo">☁️</span>
+  <div>
+    <h1>Google Drive Storage Manager</h1>
+    <p>Official Google Drive API only — all data stays on your machine</p>
+  </div>
+  <div class="status-dot">
+    <span class="dot" id="server-dot"></span>
+    <span id="server-label">Connecting…</span>
+  </div>
+</header>
+
+<!-- ══════════ MAIN ══════════ -->
+<main>
+
+  <!-- Storage bars -->
+  <div class="grid-2" id="storage-section">
+    <div class="card" id="card-primary">
+      <div class="card-title">Primary Account</div>
+      <div class="skeleton" style="width:60%;height:20px;margin-bottom:6px"></div>
+      <div class="skeleton"></div>
+    </div>
+    <div class="card" id="card-secondary">
+      <div class="card-title">Secondary Account</div>
+      <div class="skeleton" style="width:60%;height:20px;margin-bottom:6px"></div>
+      <div class="skeleton"></div>
+    </div>
+  </div>
+
+  <!-- Config tags -->
+  <div class="section-gap tag-info" id="config-tags" style="display:none">
+    <span class="tag" id="tag-threshold">⚡ Threshold: —</span>
+    <span class="tag" id="tag-backup">💾 Backup: —</span>
+    <span class="tag" id="tag-confirm">🛡️ Confirm delete: —</span>
+    <span class="tag" id="tag-dryrun"></span>
+  </div>
+
+  <!-- Folder picker + candidates -->
+  <div class="grid-2 section-gap">
+    <div class="card">
+      <div class="flex-between" style="margin-bottom:14px">
+        <div class="card-title" style="margin:0">Select Folders to Migrate</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost btn-sm" onclick="selectAll()">All</button>
+          <button class="btn btn-ghost btn-sm" onclick="clearAll()">None</button>
+        </div>
+      </div>
+      <div class="folder-list scrollbar-thin" id="folder-list">
+        <div class="empty-state">Loading folders…</div>
+      </div>
+      <div style="margin-top:8px;font-size:11px;color:var(--muted)">
+        Nothing checked = full Drive + Photos scan (recommended)
+      </div>
+      <div style="margin-top:8px;display:flex;gap:8px">
+        <button class="btn btn-ghost btn-sm" onclick="loadCandidates()" id="btn-scan">🔍 Scan Files</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="flex-between" style="margin-bottom:14px">
+        <div class="card-title" style="margin:0">Migration Candidates</div>
+        <span id="candidate-count" style="font-size:12px;color:var(--muted)"></span>
+      </div>
+      <div id="candidates-area" style="max-height:300px;overflow-y:auto" class="scrollbar-thin">
+        <div class="empty-state">Click Scan Files to find migration candidates</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Migrate button + controls -->
+  <div class="section-gap card flex-between" style="padding:16px 20px">
+    <div style="display:flex;align-items:center;gap:12px">
+      <button class="btn btn-primary" id="btn-migrate" onclick="startMigration()" disabled>
+        🚀 Start Migration
+      </button>
+      <button class="btn btn-ghost btn-sm" onclick="loadStatus()" id="btn-refresh">
+        🔄 Refresh
+      </button>
+    </div>
+    <div id="migrate-status" style="font-size:12px;color:var(--muted)"></div>
+  </div>
+
+  <!-- Progress section -->
+  <div class="section-gap card" id="progress-section" style="display:none">
+    <div class="card-title">Migration Progress</div>
+    <div class="progress-wrap">
+      <div class="progress-label" id="progress-label">Preparing…</div>
+      <div class="progress-bar"><div class="fill" id="progress-fill" style="width:0%"></div></div>
+    </div>
+    <div id="log-box" class="log-box scrollbar-thin"></div>
+  </div>
+
+  <!-- Log viewer -->
+  <div class="section-gap card">
+    <div class="flex-between" style="margin-bottom:10px">
+      <div class="card-title" style="margin:0">Migration Log</div>
+      <button class="btn btn-ghost btn-sm" onclick="loadLog()">Reload</button>
+    </div>
+    <div id="log-viewer" class="log-box scrollbar-thin" style="
+      background:#0a0c14; border:1px solid var(--border); border-radius:8px;
+      padding:12px; font-family:monospace; font-size:11px;
+      max-height:200px; overflow-y:auto; color:#94a3b8;">
+      Click Reload to view log…
+    </div>
+  </div>
+
+  <!-- Kept files -->
+  <div class="section-gap card">
+    <div class="flex-between" style="margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="card-title" style="margin:0">Kept in Primary</div>
+        <span id="kept-count" style="font-size:11px;color:var(--muted)"></span>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost btn-sm" onclick="loadKeptFiles()">Reload</button>
+        <button class="btn btn-ghost btn-sm" id="btn-clear-kept"
+                onclick="clearAllKept()"
+                style="color:var(--red);border-color:var(--red);display:none">
+          Clear All
+        </button>
+      </div>
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5">
+      Files you clicked <strong>Keep It</strong> on will not be suggested for migration again.
+      Click <strong>Suggest Again</strong> on any row to remove it from this list.
+    </p>
+    <div id="kept-list"></div>
+  </div>
+
+</main>
+
+<!-- ══════════ BULK DELETE MODAL ══════════ -->
+<div class="modal-backdrop" id="delete-modal" style="display:none">
+  <div class="modal" style="max-width:580px;width:95%">
+    <h2>🗑️ Confirm Deletions</h2>
+    <p style="margin-bottom:14px;line-height:1.6">
+      These files were migrated to your secondary account.
+      Check the ones you want to remove from primary — unchecked files
+      will be remembered and not suggested again.
+    </p>
+
+    <!-- Select-all row -->
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;
+                background:#12141f;border-radius:8px;margin-bottom:6px">
+      <input type="checkbox" id="bulk-select-all" checked
+             onchange="bulkToggleAll(this.checked)"
+             style="accent-color:var(--accent);width:14px;height:14px;flex-shrink:0">
+      <label for="bulk-select-all" style="font-size:12px;cursor:pointer;color:var(--muted)">
+        Select all
+      </label>
+      <span id="bulk-count" style="margin-left:auto;font-size:11px;color:var(--accent)"></span>
+    </div>
+
+    <!-- File checklist -->
+    <div id="bulk-file-list"
+         style="max-height:320px;overflow-y:auto;margin-bottom:16px;
+                border:1px solid var(--border);border-radius:8px"
+         class="scrollbar-thin"></div>
+
+    <div class="actions">
+      <button class="btn btn-ghost" onclick="answerBulkDelete(false)">Keep All</button>
+      <button class="btn btn-danger" id="btn-bulk-confirm" onclick="answerBulkDelete(true)">
+        Delete Selected
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ SCRIPT ══════════ -->
+<script>
+const API = 'http://localhost:5000/api';
+
+// Retry a fetch up to `attempts` times on network errors (not on HTTP 4xx/5xx).
+// Useful when the server has just started and isn't ready for the first request.
+async function fetchWithRetry(url, opts = {}, attempts = 3, delayMs = 1500) {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const r = await fetch(url, opts);
+      return r;  // any HTTP response counts as success here — caller checks status
+    } catch (err) {
+      if (i < attempts - 1) {
+        await new Promise(res => setTimeout(res, delayMs * (i + 1)));
+      } else {
+        throw err;
+      }
+    }
+  }
+}
+
+let _folders = [];
+let _candidates = [];
+let _migrationRunning = false;
+let _evtSource = null;
+let _bulkDeleteFiles = [];   // {fileId, fileName} collected during migration
+let _keptFiles = {};         // mirror of kept_files.json for UI hints
+let _cfg = {};
+let _totalFiles = 0;
+let _doneFiles  = 0;
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+window.onload = async () => {
+  await Promise.all([loadConfig(), loadStatus(), loadFolders(), loadKeptFiles()]);
+  loadCandidates();  // fetchWithRetry handles transient startup delays
+};
+
+// ── Config ───────────────────────────────────────────────────────────────────
+async function loadConfig() {
+  try {
+    const r = await fetchWithRetry(`${API}/config`);
+    _cfg = await r.json();
+    document.getElementById('config-tags').style.display = 'flex';
+    document.getElementById('tag-threshold').textContent =
+      `⚡ Trigger at ${_cfg.threshold}% full`;
+    document.getElementById('tag-backup').textContent =
+      _cfg.local_backup_dir
+        ? `💾 Backup: ${_cfg.local_backup_dir}`
+        : '💾 Backup: disabled';
+    document.getElementById('tag-confirm').textContent =
+      `🛡️ Confirm delete: ${_cfg.confirm_before_delete ? 'Yes' : 'No'}`;
+    if (_cfg.dry_run) {
+      document.getElementById('tag-dryrun').textContent = '🧪 DRY RUN';
+      document.getElementById('tag-dryrun').style.color = 'var(--yellow)';
+    }
+  } catch {}
+}
+
+// ── Storage status ────────────────────────────────────────────────────────────
+async function loadStatus() {
+  document.getElementById('server-dot').className = 'dot working';
+  document.getElementById('server-label').textContent = 'Loading…';
+  try {
+    const r = await fetchWithRetry(`${API}/status`);
+    if (!r.ok) throw new Error(r.statusText);
+    const d = await r.json();
+    renderStorage('card-primary',   d.primary);
+    renderStorage('card-secondary', d.secondary);
+    document.getElementById('server-dot').className  = 'dot online';
+    document.getElementById('server-label').textContent = 'Server online';
+  } catch (e) {
+    document.getElementById('server-dot').className  = 'dot';
+    document.getElementById('server-label').textContent = 'Cannot reach server';
+    showOfflineNotice();
+  }
+}
+
+function renderStorage(cardId, info) {
+  const pct  = info.percent_used;
+  const cls  = pct >= 90 ? 'crit' : pct >= 70 ? 'warn' : 'ok';
+  const fill = pct >= 90 ? 'crit' : pct >= 70 ? 'warn' : '';
+  document.getElementById(cardId).innerHTML = `
+    <div class="card-title">${cardId === 'card-primary' ? 'Primary' : 'Secondary'} Account</div>
+    <div class="account-label">${cardId === 'card-primary' ? '👤 Primary' : '👤 Secondary'}</div>
+    <div class="account-email">${info.email}</div>
+    <div class="pct ${cls}">${pct}%</div>
+    <div class="bar-track">
+      <div class="bar-fill ${fill}" style="width:${Math.min(pct,100)}%"></div>
+    </div>
+    <div class="bar-meta">
+      <span>${info.used_gb} GB used</span>
+      <span>${info.free_gb} GB free / ${info.total_gb} GB total</span>
+    </div>
+    ${(info.drive_gb !== undefined) ? `
+    <div class="bar-meta" style="font-size:11px;color:var(--muted);margin-top:4px">
+      <span title="Files in My Drive">📁 Drive: ${info.drive_gb} GB</span>
+      <span title="Trashed files still consuming quota">🗑️ Trash: ${info.trash_gb} GB</span>
+      <span title="Gmail emails+attachments and Google Photos (both count against quota)">✉️ Gmail+Photos: ${info.other_gb} GB</span>
+    </div>` : ''}
+  `;
+}
+
+function showOfflineNotice() {
+  document.getElementById('card-primary').innerHTML = `
+    <div class="card-title">Primary Account</div>
+    <div class="empty-state" style="color:var(--red)">
+      ❌ Cannot connect to server.<br>
+      <span style="font-size:11px;color:var(--muted)">Make sure <code>python server.py</code> is running.</span>
+    </div>`;
+  document.getElementById('card-secondary').innerHTML = `
+    <div class="card-title">Secondary Account</div>
+    <div class="empty-state" style="color:var(--red)">
+      ❌ Server not reachable
+    </div>`;
+}
+
+// ── Folders ───────────────────────────────────────────────────────────────────
+async function loadFolders() {
+  try {
+    const r = await fetchWithRetry(`${API}/folders`);
+    const d = await r.json();
+    _folders = d.folders || [];
+    renderFolders();
+  } catch {
+    document.getElementById('folder-list').innerHTML =
+      '<div class="empty-state" style="color:var(--red)">Could not load folders</div>';
+  }
+}
+
+function renderFolders() {
+  const el = document.getElementById('folder-list');
+  if (!_folders.length) {
+    el.innerHTML = '<div class="empty-state">No folders found in primary Drive</div>';
+    return;
+  }
+  el.innerHTML = _folders.map(f => {
+    const isPhotos = f.type === 'photos';
+    const icon     = isPhotos ? '📷' : '📁';
+    const cls      = isPhotos ? 'folder-item photos-item' : 'folder-item';
+    // For Photos, show pre-fetched count/size from server; for Drive folders show spinner
+    let sizeHtml;
+    if (isPhotos && (f.count > 0 || f.total_bytes > 0)) {
+      sizeHtml = `<span class="folder-size" id="fs-${f.id}">${f.count} item${f.count!==1?'s':''} · ${fmtBytes(f.total_bytes)}</span>`;
+    } else {
+      sizeHtml = `<span class="folder-size" id="fs-${f.id}">${isPhotos ? 'loading…' : ''}</span>`;
+    }
+    const badge = isPhotos ? '<span class="photos-badge">Google Photos</span>' : '';
+    return `
+    <label class="${cls}" id="fi-${f.id}">
+      <input type="checkbox" value="${f.id}" onchange="onFolderChange(this)">
+      <span class="folder-icon">${icon}</span>
+      <span class="folder-name">${esc(f.name)}</span>${badge}
+      ${sizeHtml}
+    </label>`;
+  }).join('');
+  loadFolderSizes();
+}
+
+function onFolderChange(cb) {
+  const item = cb.closest('.folder-item');
+  if (cb.checked) item.classList.add('checked');
+  else            item.classList.remove('checked');
+}
+
+function getCheckedFolderIds() {
+  return [...document.querySelectorAll('#folder-list input:checked')].map(i => i.value);
+}
+
+function selectAll() {
+  document.querySelectorAll('#folder-list input[type=checkbox]').forEach(cb => {
+    cb.checked = true;
+    cb.closest('.folder-item').classList.add('checked');
+  });
+}
+
+function clearAll() {
+  document.querySelectorAll('#folder-list input[type=checkbox]').forEach(cb => {
+    cb.checked = false;
+    cb.closest('.folder-item').classList.remove('checked');
+  });
+}
+
+// ── Candidates ────────────────────────────────────────────────────────────────
+async function loadFolderSizes() {
+  for (const f of _folders) {
+    const el = document.getElementById(`fs-${f.id}`);
+    if (!el) continue;
+    // Google Photos size is pre-populated from /api/folders — skip refetch
+    if (f.type === 'photos') {
+      if (f.count > 0 || f.total_bytes > 0)
+        el.textContent = `${f.count} item${f.count!==1?'s':''} · ${fmtBytes(f.total_bytes)}`;
+      else
+        el.textContent = '';
+      continue;
+    }
+    // Drive folders: count all owned files recursively (any type, any age)
+    try {
+      const r = await fetch(`${API}/folder-size`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({folder_id: f.id}),
+      });
+      const d = await r.json();
+      if (d.count > 0)
+        el.textContent = `${d.count} file${d.count!==1?'s':''} · ${fmtBytes(d.total_bytes)}`;
+      else
+        el.textContent = 'empty';
+    } catch { el.textContent = '—'; }
+  }
+}
+
+async function loadCandidates() {
+  const ids = getCheckedFolderIds();
+  const scanLabel = ids.length ? `${ids.length} folder${ids.length>1?'s':''}` : 'all of My Drive';
+  document.getElementById('candidates-area').innerHTML =
+    `<div class="empty-state"><span class="spinner"></span> Scanning ${scanLabel}…</div>`;
+  document.getElementById('candidate-count').textContent = '';
+
+  try {
+    const r = await fetchWithRetry(`${API}/candidates`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({folder_ids: ids}),
+    }, 3, 2000);
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.statusText);
+    _candidates = d.files || [];
+    renderCandidates();
+  } catch (err) {
+    document.getElementById('candidates-area').innerHTML =
+      `<div class="empty-state" style="color:var(--red)">
+        ⚠️ Scan failed — server unreachable or crashed<br>
+        <span style="font-size:11px;color:var(--muted)">${esc(String(err))}</span><br>
+        <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="loadCandidates()">↺ Retry</button>
+      </div>`;
+  }
+}
+
+function renderCandidates() {
+  const area  = document.getElementById('candidates-area');
+  const count = document.getElementById('candidate-count');
+  const btn   = document.getElementById('btn-migrate');
+
+  if (!_candidates.length) {
+    const keptCount = Object.keys(_keptFiles || {}).length;
+    const keptHint = keptCount
+      ? `<br><span style="font-size:11px;color:var(--muted)">${keptCount} file${keptCount>1?'s are':' is'} in the <strong>Kept in Primary</strong> list — click <em>Suggest Again</em> to re-include any.</span>`
+      : '';
+    area.innerHTML = `<div class="empty-state">✅ No migratable Drive files found${keptHint}
+      <br><span style="font-size:11px;color:var(--muted)">
+        Check the <strong>Drive / Trash / Gmail+Photos</strong> breakdown in the status cards above.<br>
+        If Gmail+Photos is large, the storage cannot be freed with this tool:<br>
+        &bull; <strong>Gmail</strong> — bulk-delete large emails at
+          <a href="https://mail.google.com" target="_blank" style="color:inherit">mail.google.com</a>
+          (sort by size in "All Mail")<br>
+        &bull; <strong>Trash</strong> — empty Drive trash at
+          <a href="https://drive.google.com/drive/trash" target="_blank" style="color:inherit">drive.google.com/drive/trash</a><br>
+        &bull; <strong>Recent files</strong> — files newer than ${_cfg.min_age_days||30} days are excluded; lower MIN_AGE_DAYS in config.py
+      </span></div>`;
+    count.textContent = '0 files';
+    btn.disabled = true;
+    return;
+  }
+
+  const totalMB = _candidates.reduce((s,f) => s + parseInt(f.size||0), 0) / 1e6;
+  count.textContent = `${_candidates.length} files · ${totalMB.toFixed(1)} MB`;
+
+  area.innerHTML = `
+    <table class="file-table">
+      <colgroup>
+        <col style="width:28%">
+        <col style="width:34%">
+        <col style="width:12%">
+        <col style="width:11%">
+        <col style="width:15%">
+      </colgroup>
+      <thead>
+        <tr>
+          <th>File Name</th>
+          <th>Location (Drive Path)</th>
+          <th style="text-align:right">Size</th>
+          <th>Created</th>
+          <th>Type</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${_candidates.map(f => `
+          <tr title="${esc(f.name)} — ${esc(f.location||'My Drive')}">
+            <td style="font-weight:500">${esc(truncate(f.name,32))}</td>
+            <td class="location-cell" title="${esc(f.location||'My Drive')}">📂 ${esc(f.location||'My Drive')}</td>
+            <td class="size-cell">${fmtBytes(parseInt(f.size||0))}</td>
+            <td style="color:var(--muted)">${f.createdTime ? f.createdTime.slice(0,10) : '—'}</td>
+            <td><span class="mime-badge">${shortMime(f.mimeType)}</span></td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+
+  btn.disabled = false;
+  document.getElementById('migrate-status').textContent = '';
+}
+
+// ── Migration ─────────────────────────────────────────────────────────────────
+async function startMigration() {
+  if (_migrationRunning) return;
+  const ids = getCheckedFolderIds();
+
+  document.getElementById('progress-section').style.display = 'block';
+  document.getElementById('log-box').innerHTML = '';
+  setProgress(0, 'Starting migration…');
+  _migrationRunning = true;
+  _totalFiles = _candidates.length;
+  _doneFiles  = 0;
+
+  // Clear any leftover bulk-delete state from a previous run
+  _bulkDeleteFiles = [];
+  document.getElementById('delete-modal').style.display = 'none';
+
+  document.getElementById('btn-migrate').disabled = true;
+  document.getElementById('btn-migrate').innerHTML = '<span class="spinner"></span> Migrating…';
+
+  // Start SSE listener BEFORE posting /migrate
+  if (_evtSource) _evtSource.close();
+  _evtSource = new EventSource(`${API}/progress`);
+  _evtSource.onmessage = e => handleEvent(JSON.parse(e.data));
+  _evtSource.onerror   = () => logLine('⚠️ SSE connection lost', 'warn');
+
+  try {
+    await fetch(`${API}/migrate`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({folder_ids: ids}),
+    });
+  } catch(err) {
+    logLine(`❌ Failed to start: ${err}`, 'err');
+    resetMigrateButton();
+  }
+}
+
+function handleEvent(ev) {
+  switch (ev.type) {
+    case 'status':
+      logLine(`ℹ️  ${ev.msg}`, 'info');
+      setProgress(0, ev.msg);
+      break;
+
+    case 'candidates':
+      logLine(`🔍 Found ${ev.count} file(s) (${ev.total_mb} MB)`, 'accent');
+      break;
+
+    case 'file_start':
+      _totalFiles = ev.total;
+      setProgress((_doneFiles / _totalFiles) * 100,
+        `[${ev.index}/${ev.total}] ${ev.name} (${ev.size_mb} MB)`);
+      logLine(`📄 [${ev.index}/${ev.total}] ${ev.name}`, 'info');
+      break;
+
+    case 'progress':
+      logLine(`  ⟳ ${ev.step}…`, 'info');
+      break;
+
+    case 'backup':
+      logLine(`  💾 Saved locally: ${ev.path}`, 'ok');
+      break;
+
+    case 'uploaded':
+      logLine(`  ✅ Uploaded to secondary`, 'ok');
+      break;
+
+    case 'confirm_delete':
+      _bulkDeleteFiles.push({fileId: ev.file_id, fileName: ev.file});
+      if (document.getElementById('delete-modal').style.display === 'none') {
+        showBulkDeleteModal();          // first file — open the modal
+      } else {
+        _appendBulkRow(ev.file_id, ev.file);  // modal already open — add row
+      }
+      break;
+
+    case 'deleted':
+      logLine(`  🗑️  Deleted from primary: ${ev.file}`, 'warn');
+      _doneFiles++;
+      setProgress((_doneFiles / _totalFiles) * 100, `Deleted: ${ev.file}`);
+      break;
+
+    case 'delete_skipped':
+      logLine(`  ⏭️  Kept in primary: ${ev.file}`, 'info');
+      _doneFiles++;
+      break;
+
+    case 'skip':
+      logLine(`  ⏭️  Skipped (${ev.reason}): ${ev.file}`, 'warn');
+      break;
+
+    case 'error':
+      logLine(`  ❌ Error on ${ev.file}: ${ev.error}`, 'err');
+      _doneFiles++;
+      break;
+
+    case 'done': {
+      const s = ev.summary;
+      setProgress(100, 'Migration complete ✅');
+      logLine('', 'info');
+      logLine(`✅ Done: ${s.files_migrated} migrated, ${s.files_failed} failed, ${(s.bytes_moved/1e6).toFixed(1)} MB moved`, 'ok');
+      resetMigrateButton();
+      loadStatus();
+      loadCandidates();   // refresh list — migrated/deleted files should no longer appear
+      if (_evtSource) { _evtSource.close(); _evtSource = null; }
+      // Fallback: open modal if confirm_delete events were received but modal is still closed
+      if (_bulkDeleteFiles.length && document.getElementById('delete-modal').style.display === 'none') {
+        showBulkDeleteModal();
+      }
+      break;
+    }
+
+    case 'stream_end':
+      resetMigrateButton();
+      if (_evtSource) { _evtSource.close(); _evtSource = null; }
+      break;
+
+    case 'heartbeat':
+      break;
+  }
+}
+
+function setProgress(pct, label) {
+  document.getElementById('progress-fill').style.width  = `${pct}%`;
+  document.getElementById('progress-label').textContent = label;
+}
+
+function logLine(text, cls = 'info') {
+  const box = document.getElementById('log-box');
+  const el  = document.createElement('div');
+  el.className = `log-${cls}`;
+  el.textContent = text;
+  box.appendChild(el);
+  box.scrollTop = box.scrollHeight;
+}
+
+function resetMigrateButton() {
+  _migrationRunning = false;
+  const btn = document.getElementById('btn-migrate');
+  btn.disabled = false;
+  btn.innerHTML = '🚀 Start Migration';
+}
+
+// ── Bulk delete modal ─────────────────────────────────────────────────────────
+function showBulkDeleteModal() {
+  const list = document.getElementById('bulk-file-list');
+  list.innerHTML = _bulkDeleteFiles.map(f => `
+    <label style="display:flex;align-items:center;gap:10px;padding:9px 12px;
+                  cursor:pointer;border-bottom:1px solid var(--border)">
+      <input type="checkbox" class="bulk-cb" checked value="${esc(f.fileId)}"
+             onchange="updateBulkCount()"
+             style="accent-color:var(--accent);width:14px;height:14px;flex-shrink:0">
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px"
+            title="${esc(f.fileName)}">${esc(f.fileName)}</span>
+    </label>`).join('');
+  updateBulkCount();
+  document.getElementById('delete-modal').style.display = 'flex';
+}
+
+function _appendBulkRow(fileId, fileName) {
+  // Add a single new row to an already-open bulk modal
+  const list = document.getElementById('bulk-file-list');
+  const row = document.createElement('label');
+  row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--border)';
+  row.innerHTML = `
+    <input type="checkbox" class="bulk-cb" checked value="${esc(fileId)}"
+           onchange="updateBulkCount()"
+           style="accent-color:var(--accent);width:14px;height:14px;flex-shrink:0">
+    <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px"
+          title="${esc(fileName)}">${esc(fileName)}</span>`;
+  list.appendChild(row);
+  updateBulkCount();
+}
+
+function updateBulkCount() {
+  const checked = document.querySelectorAll('.bulk-cb:checked').length;
+  const total   = document.querySelectorAll('.bulk-cb').length;
+  document.getElementById('bulk-count').textContent =
+    `${checked} of ${total} selected`;
+  const btn = document.getElementById('btn-bulk-confirm');
+  btn.textContent = checked ? `Delete ${checked} File${checked !== 1 ? 's' : ''}` : 'Delete Selected';
+  btn.disabled = checked === 0;
+  const allCb = document.getElementById('bulk-select-all');
+  allCb.checked = checked === total;
+  allCb.indeterminate = checked > 0 && checked < total;
+}
+
+function bulkToggleAll(checked) {
+  document.querySelectorAll('.bulk-cb').forEach(cb => { cb.checked = checked; });
+  updateBulkCount();
+}
+
+async function answerBulkDelete(doDelete) {
+  document.getElementById('delete-modal').style.display = 'none';
+  if (!_bulkDeleteFiles.length) return;
+
+  let toDelete, toKeep;
+  if (doDelete) {
+    const selectedIds = new Set(
+      [...document.querySelectorAll('.bulk-cb:checked')].map(cb => cb.value)
+    );
+    toDelete = _bulkDeleteFiles.filter(f =>  selectedIds.has(f.fileId));
+    toKeep   = _bulkDeleteFiles.filter(f => !selectedIds.has(f.fileId));
+  } else {
+    toDelete = [];
+    toKeep   = [..._bulkDeleteFiles];
+  }
+
+  _bulkDeleteFiles = [];
+
+  // Fire all requests in parallel
+  const calls = [
+    ...toDelete.map(f => _confirmDelete(f.fileId, true)),
+    ...toKeep.map(f   => _confirmDelete(f.fileId, false)),
+  ];
+  const results = await Promise.allSettled(calls);
+
+  const failed = results.filter(r => r.status === 'rejected' || r.value === false);
+  if (failed.length) {
+    logLine(`⚠️ ${failed.length} operation(s) failed — check migration log`, 'warn');
+  }
+  if (toKeep.length) loadKeptFiles();
+}
+
+async function _confirmDelete(fileId, confirm) {
+  try {
+    const r = await fetch(`${API}/confirm-delete`, {
+      method:  'POST',
+      headers: {'Content-Type':'application/json'},
+      body:    JSON.stringify({file_id: fileId, confirm}),
+    });
+    if (!r.ok && r.status !== 404) {
+      const d = await r.json().catch(() => ({}));
+      logLine(`❌ ${confirm ? 'Delete' : 'Keep'} failed: ${d.error || `HTTP ${r.status}`}`, 'err');
+      return false;
+    }
+    return true;
+  } catch (err) {
+    logLine(`❌ Request error: ${err}`, 'err');
+    return false;
+  }
+}
+
+// ── Kept files ────────────────────────────────────────────────────────────────
+async function loadKeptFiles() {
+  try {
+    const r = await fetch(`${API}/kept-files`);
+    const d = await r.json();
+    renderKeptFiles(d.files || {});
+  } catch {
+    document.getElementById('kept-list').innerHTML =
+      '<span style="color:var(--red);font-size:12px">Could not load kept files</span>';
+  }
+}
+
+function renderKeptFiles(files) {
+  _keptFiles = files;  // cache so renderCandidates can read the count
+  const entries = Object.entries(files);
+  const countEl = document.getElementById('kept-count');
+  const clearBtn = document.getElementById('btn-clear-kept');
+  const list = document.getElementById('kept-list');
+
+  countEl.textContent = entries.length ? `(${entries.length} file${entries.length > 1 ? 's' : ''})` : '';
+  clearBtn.style.display = entries.length ? 'inline-flex' : 'none';
+
+  if (!entries.length) {
+    list.innerHTML = '<div class="empty-state" style="padding:16px 0">No files kept yet — they will appear here when you click Keep It during a migration.</div>';
+    return;
+  }
+
+  list.innerHTML = `
+    <table class="file-table">
+      <colgroup>
+        <col style="width:44%"><col style="width:32%"><col style="width:24%">
+      </colgroup>
+      <thead>
+        <tr>
+          <th>File Name</th>
+          <th>Kept On</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${entries.map(([id, info]) => `
+          <tr>
+            <td style="font-weight:500">${esc(info.name || id)}</td>
+            <td style="color:var(--muted)">${info.kept_at ? info.kept_at.slice(0,16).replace('T',' ') : '—'}</td>
+            <td style="text-align:right">
+              <button class="btn btn-ghost btn-sm"
+                      style="font-size:11px"
+                      onclick="removeKeptFile('${esc(id)}', this)">
+                Suggest Again
+              </button>
+            </td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+async function removeKeptFile(fileId, btn) {
+  btn.disabled = true;
+  btn.textContent = '…';
+  try {
+    const r = await fetch(`${API}/kept-files/remove`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({file_id: fileId}),
+    });
+    if (r.ok) {
+      loadKeptFiles();
+    } else {
+      btn.disabled = false;
+      btn.textContent = 'Suggest Again';
+    }
+  } catch {
+    btn.disabled = false;
+    btn.textContent = 'Suggest Again';
+  }
+}
+
+async function clearAllKept() {
+  if (!confirm('Remove all kept files from the list? They will be suggested for migration again.')) return;
+  try {
+    await fetch(`${API}/kept-files/clear`, {method: 'POST'});
+    loadKeptFiles();
+  } catch {}
+}
+
+// ── Log viewer ────────────────────────────────────────────────────────────────
+async function loadLog() {
+  try {
+    const r = await fetch(`${API}/log`);
+    const d = await r.json();
+    const viewer = document.getElementById('log-viewer');
+    viewer.textContent = d.lines.join('\n') || 'Log is empty.';
+    viewer.scrollTop = viewer.scrollHeight;
+  } catch {
+    document.getElementById('log-viewer').textContent = 'Could not load log.';
+  }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function truncate(s, n) { return s.length > n ? s.slice(0, n) + '…' : s; }
+function fmtBytes(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
+  if (b < 1073741824) return (b/1048576).toFixed(1) + ' MB';
+  return (b/1073741824).toFixed(2) + ' GB';
+}
+function shortMime(m) {
+  if (!m) return 'unknown';
+  if (m.includes('jpeg') || m.includes('jpg')) return 'JPEG';
+  if (m.includes('png'))  return 'PNG';
+  if (m.includes('pdf'))  return 'PDF';
+  if (m.includes('video')) return 'Video';
+  if (m.includes('audio')) return 'Audio';
+  if (m.includes('spreadsheet') || m.includes('excel')) return 'Sheet';
+  if (m.includes('document') || m.includes('word'))     return 'Doc';
+  const parts = m.split('/');
+  return parts[parts.length-1].slice(0,12);
+}
+</script>
+</body>
+</html>
